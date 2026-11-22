@@ -3,22 +3,31 @@
 A D runtime for [FlatBuffers](https://flatbuffers.dev/), modeled on the Go and
 C# implementations.
 
-This directory contains the runtime library, verifier, integration tests, and
-the generated-code test fixtures. The D backend lives in `src/idl_gen_dlang.cpp`
+This repository is the standalone DUB package. It contains the runtime,
+verifier, FlexBuffers support, and tests. The `flatc` D code generator lives in
+the [FlatBuffers fork](https://github.com/cyrusmsk/flatbuffers/tree/dlang_support)
 and is invoked through `flatc --dlang`.
+
+The package is published on the DUB registry as
+[`flatbuffers-d`](https://code.dlang.org/packages/flatbuffers-d).
 
 ## Requirements
 
 - DMD 2.112+ or LDC 1.42+
 - DUB
+- A `flatc` build with D support to generate bindings (see below)
 
-The DUB package is named `flatbuffers-d`:
+## Installation
 
 ```bash
 dub add flatbuffers-d
 ```
 
-The import name remains `flatbuffers`.
+The import name is `flatbuffers`:
+
+```d
+import flatbuffers;
+```
 
 ## Package layout
 
@@ -31,31 +40,29 @@ The import name remains `flatbuffers`.
 - `source/flatbuffers/flexbuffers/` - builder, zero-copy reader, and verifier
   for the schema-less FlexBuffers format
 - `source/flatbuffers/package.d` - public imports
-- `tests/generated/` - flatc-generated binary bindings used by the
-  integration test
-- `tests/generated_serialize/` - flatc-generated asdf bindings
-- `tests/integration.d` - golden buffer and round-trip tests
-- `tests/serialize.d` - asdf JSON shape and enum input tests
-- `tests/conformance.d` - optional scalars, includes/no-namespace, and required strings
-- `tests/flexbuffers.d` - FlexBuffers builder/reader/verifier tests and
-  cross-language golden coverage
+- `tests/` - integration, serialization, conformance, codegen matrix, and
+  FlexBuffers tests, with their generated bindings and golden data
+- `BUILD.bazel` - Bazel target `//:flatbuffers`
 
 ## Generating bindings
 
-Build `flatc` from the repository root and generate the D bindings:
+The `--dlang` backend ships with the FlatBuffers fork, not with this package.
+Clone the `dlang_support` branch and build `flatc`:
 
 ```bash
+git clone -b dlang_support https://github.com/cyrusmsk/flatbuffers.git
+cd flatbuffers
 cmake -S . -B build -G Ninja \
   -DFLATBUFFERS_BUILD_TESTS=OFF \
   -DFLATBUFFERS_BUILD_FLATLIB=OFF \
   -DFLATBUFFERS_BUILD_FLATC=ON
 cmake --build build --target flatc
+```
 
-./build/flatc --dlang -I tests/include_test \
-  -o d/tests/generated tests/monster_test.fbs
+Then generate D modules from your schema:
 
-./build/flatc --dlang --dlang-serialize -I tests/include_test \
-  -o d/tests/generated_serialize tests/monster_test.fbs
+```bash
+./build/flatc --dlang -o path/to/source path/to/schema.fbs
 ```
 
 `--dlang` emits one D module per schema type under the schema namespace.
@@ -64,77 +71,29 @@ asdf input support for enums. It does not generate table JSON deserialization.
 
 ## Building and testing
 
-From this directory:
+From the package root:
 
 ```bash
 dub test
 dub test --build=release
+dub build --build=release
 dub run --config=integration
 dub run --config=serialize
 dub run --config=conformance
 dub run --config=matrix
 dub run --config=flexbuffers
-dub build --build=release
 ```
 
-The binary configurations do not depend on asdf. The `serialize` configuration
-adds asdf 0.8.0.
+The executable configurations use the generated fixtures under `tests/`. The
+`serialize` and `matrix` configurations additionally require asdf 0.8.0; the
+runtime library itself has no dependencies. The tests read
+`tests/data/monsterdata_test.mon` and `tests/data/gold_flexbuffer_example.bin`.
 
-The integration and serialization tests read
-`tests/data/monsterdata_test.mon`; the FlexBuffers test reads
-`tests/data/gold_flexbuffer_example.bin`.
-
-The runtime is also available as the Bazel target `//d:flatbuffers`:
+The runtime is also available as the Bazel target `//:flatbuffers`:
 
 ```bash
-bazel build //d:flatbuffers
+bazel build //:flatbuffers
 ```
-
-## FlexBuffers
-
-`flatbuffers.flexbuffers` implements the schema-less FlexBuffers format and is
-wire-compatible with the C++ and Rust implementations:
-
-```d
-import flatbuffers.flexbuffers;
-
-auto builder = Builder(256);
-auto map = builder.startMap();
-map.put("answer", 42);
-map.putString("name", "D");
-map.end();
-builder.finish();
-
-if (!verifyBuffer(builder.finishedBytes()))
-    throw new Exception("invalid FlexBuffer");
-
-auto root = getRoot(builder.finishedBytes());
-auto mapView = root.asMap();
-assert(mapView["answer"].asInt64 == 42);
-assert(mapView["name"].asString == "D");
-```
-
-The builder supports maps, heterogeneous/typed/fixed vectors, strings, keys,
-blobs, indirect values, key/string sharing, and value reuse. The reader is
-zero-copy and `@nogc nothrow`; invalid or malformed input yields invalid
-references or default values. The verifier is also `@nogc nothrow` and can use
-an optional caller-provided reuse tracker:
-
-```d
-ubyte[] tracker = new ubyte[bytes.length];
-if (!verifyBuffer(bytes, VerifierOptions.init, tracker))
-    throw new Exception("invalid FlexBuffer");
-```
-
-The tracker must be at least as long as the buffer and is cleared for the
-checked range before each verification run.
-
-FlexBuffers support does not include JSON/asdf conversion, in-place mutation,
-numeric-string casting, or key-vector sharing.
-
-When importing both `flatbuffers` and `flatbuffers.flexbuffers`, qualify
-`flatbuffers.flexbuffers.getRoot`, `Verifier`, and `VerifierOptions` to avoid
-the same names in the schema-based runtime.
 
 ## Use
 
@@ -184,6 +143,52 @@ one per buffer.
   malformed fields. Still verify untrusted input before relying on values.
 - The builder allocates only for buffer growth and reusable bookkeeping. Use
   `createSharedString` to deduplicate strings within one buffer.
+
+## FlexBuffers
+
+`flatbuffers.flexbuffers` implements the schema-less FlexBuffers format and is
+wire-compatible with the C++ and Rust implementations:
+
+```d
+import flatbuffers.flexbuffers;
+
+auto builder = Builder(256);
+auto map = builder.startMap();
+map.put("answer", 42);
+map.putString("name", "D");
+map.end();
+builder.finish();
+
+if (!verifyBuffer(builder.finishedBytes()))
+    throw new Exception("invalid FlexBuffer");
+
+auto root = getRoot(builder.finishedBytes());
+auto mapView = root.asMap();
+assert(mapView["answer"].asInt64 == 42);
+assert(mapView["name"].asString == "D");
+```
+
+The builder supports maps, heterogeneous/typed/fixed vectors, strings, keys,
+blobs, indirect values, key/string sharing, and value reuse. The reader is
+zero-copy and `@nogc nothrow`; invalid or malformed input yields invalid
+references or default values. The verifier is also `@nogc nothrow` and can use
+an optional caller-provided reuse tracker:
+
+```d
+ubyte[] tracker = new ubyte[bytes.length];
+if (!verifyBuffer(bytes, VerifierOptions.init, tracker))
+    throw new Exception("invalid FlexBuffer");
+```
+
+The tracker must be at least as long as the buffer and is cleared for the
+checked range before each verification run.
+
+FlexBuffers support does not include JSON/asdf conversion, in-place mutation,
+numeric-string casting, or key-vector sharing.
+
+When importing both `flatbuffers` and `flatbuffers.flexbuffers`, qualify
+`flatbuffers.flexbuffers.getRoot`, `Verifier`, and `VerifierOptions` to avoid
+the same names in the schema-based runtime.
 
 ## JSON with asdf
 
