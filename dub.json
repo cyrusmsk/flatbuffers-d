@@ -1,0 +1,92 @@
+{
+	"name": "flatbuffers-d",
+	"description": "FlatBuffers runtime for the D programming language",
+	"homepage": "https://flatbuffers.dev/",
+	"license": "Apache-2.0",
+	"authors": [
+		"Sergei Giniatulin"
+	],
+	"copyright": "Copyright 2026 Google Inc.",
+	"targetType": "library",
+	"sourcePaths": [
+		"source"
+	],
+	"importPaths": [
+		"source"
+	],
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library"
+		},
+		{
+			"name": "integration",
+			"targetType": "executable",
+			"mainSourceFile": "tests/integration.d",
+			"sourcePaths": [
+				"source",
+				"tests/generated"
+			],
+			"importPaths": [
+				"source",
+				"tests/generated"
+			]
+		},
+		{
+			"name": "serialize",
+			"targetType": "executable",
+			"mainSourceFile": "tests/serialize.d",
+			"sourcePaths": [
+				"source",
+				"tests/generated_serialize"
+			],
+			"importPaths": [
+				"source",
+				"tests/generated_serialize"
+			],
+			"dependencies": {
+				"asdf": "~>0.8.0"
+			}
+		},
+		{
+			"name": "matrix",
+			"targetType": "executable",
+			"mainSourceFile": "tests/codegen_matrix.d",
+			"sourcePaths": [
+				"source",
+				"tests/generated_matrix"
+			],
+			"importPaths": [
+				"source",
+				"tests/generated_matrix"
+			],
+			"dependencies": {
+				"asdf": "~>0.8.0"
+			}
+		},
+		{
+			"name": "conformance",
+			"targetType": "executable",
+			"mainSourceFile": "tests/conformance.d",
+			"sourcePaths": [
+				"source",
+				"tests/generated_conformance"
+			],
+			"importPaths": [
+				"source",
+				"tests/generated_conformance"
+			]
+		},
+		{
+			"name": "flexbuffers",
+			"targetType": "executable",
+			"mainSourceFile": "tests/flexbuffers.d",
+			"sourcePaths": [
+				"source"
+			],
+			"importPaths": [
+				"source"
+			]
+		}
+	]
+}

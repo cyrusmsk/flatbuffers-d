@@ -1,0 +1,9 @@
+load("@rules_d//d:defs.bzl", "d_library")
+
+package(default_visibility = ["//visibility:public"])
+
+d_library(
+    name = "flatbuffers",
+    srcs = glob(["source/**/*.d"]),
+    imports = ["source"],
+)
